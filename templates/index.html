@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MK HLS Uploader</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+*{box-sizing:border-box;font-family:system-ui}
+body{background:#0d1117;color:#fff;margin:0;padding:20px}
+.container{max-width:700px;margin:0 auto;background:#161b22;border:2px solid #f47521;border-radius:12px;padding:30px}
+h1{color:#f47521;margin:0 0 10px 0}
+.upload-box{border:3px dashed #30363d;border-radius:12px;padding:50px;text-align:center;cursor:pointer;margin:20px 0}
+.upload-box:hover{border-color:#f47521;background:#0d1117}
+input[type=file]{display:none}
+.btn{width:100%;padding:16px;background:#238636;border:none;border-radius:8px;color:#fff;font-weight:700;font-size:16px;cursor:pointer}
+.btn:disabled{background:#21262d}
+.progress{width:100%;height:8px;background:#21262d;border-radius:10px;overflow:hidden;margin:15px 0;display:none}
+.progress-bar{height:100%;background:#f47521;width:0%;transition:0.3s}
+.result{background:#0d1117;border:2px solid #30363d;border-radius:8px;padding:20px;margin:15px 0;display:none}
+.result input{width:100%;padding:12px;background:#161b22;border:1px solid #30363d;color:#58a6ff;border-radius:6px;margin:8px 0;font-family:monospace}
+video{width:100%;border-radius:8px;margin-top:15px;background:#000}
+.status{text-align:center;color:#8b949e;margin:15px 0}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🎬 Anime HLS Uploader</h1>
+  <p style="color:#8b949e">Upload → Auto M3U8 → All Audio Tracks → VLC + Browser</p>
+
+  <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+    <div style="font-size:48px">📁</div>
+    <div style="margin-top:15px;font-weight:700">Click to Select Video</div>
+    <div style="color:#8b949e;font-size:13px;margin-top:8px">MP4, MKV, AVI - Max 2GB</div>
+  </div>
+
+  <input type="file" id="fileInput" accept="video/*" onchange="uploadFile(this.files[0])">
+
+  <div class="progress" id="progress">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <h3 style="color:#238636;margin-top:0">✅ Ready - M3U8 Generated</h3>
+
+    <label>🔗 M3U8 Link - Use in VLC/Blog:</label>
+    <input type="text" id="m3u8Link" readonly onclick="this.select()">
+    <button class="btn" onclick="copyLink()">📋 Copy M3U8 Link</button>
+
+    <video id="player" controls></video>
+  </div>
+</div>
+
+<script>
+async function uploadFile(file){
+  if(!file) return;
+
+  document.getElementById('progress').style.display = 'block';
+  document.getElementById('status').innerText = '⏳ Uploading...';
+  document.getElementById('result').style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('video', file);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/upload');
+
+  xhr.upload.onprogress = (e) => {
+    if(e.lengthComputable){
+      const percent = (e.loaded / e.total) * 100;
+      document.getElementById('progressBar').style.width = percent + '%';
+      document.getElementById('status').innerText = `⏳ Uploading ${percent.toFixed(0)}%`;
+    }
+  };
+
+  xhr.onload = async function(){
+    if(xhr.status === 200){
+      const res = JSON.parse(xhr.responseText);
+      checkStatus(res.job_id);
+    }else{
+      document.getElementById('status').innerText = '❌ Upload failed';
+    }
+  };
+
+  xhr.send(formData);
+}
+
+async function checkStatus(jobId){
+  document.getElementById('status').innerText = '⚙️ Converting to HLS... This takes time';
+
+  const interval = setInterval(async () => {
+    const res = await fetch(`/status/${jobId}`);
+    const data = await res.json();
+
+    if(data.status === 'completed'){
+      clearInterval(interval);
+      const fullUrl = window.location.origin + data.m3u8_url;
+      document.getElementById('m3u8Link').value = fullUrl;
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('status').innerText = '✅ Done! Link works in VLC + Browser';
+      document.getElementById('progress').style.display = 'none';
+
+      // Browser preview
+      const video = document.getElementById('player');
+      if(Hls.isSupported()){
+        const hls = new Hls();
+        hls.loadSource(fullUrl);
+        hls.attachMedia(video);
+      }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+        video.src = fullUrl;
+      }
+
+    }else if(data.status === 'failed'){
+      clearInterval(interval);
+      document.getElementById('status').innerText = '❌ Error: ' + data.error;
+    }
+  }, 2000);
+}
+
+function copyLink(){
+  const input = document.getElementById('m3u8Link');
+  input.select();
+  document.execCommand('copy');
+  alert('✅ M3U8 Link Copied!');
+}
+</script>
+</body>
+</html>
