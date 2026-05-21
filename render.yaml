@@ -1,0 +1,9 @@
+services:
+    - type: web
+    name: anime-hls-uploader
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+            - key: PORT
+        value: 10000
